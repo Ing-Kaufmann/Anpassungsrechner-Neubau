@@ -1,0 +1,698 @@
+<title>GEG-Delta-Check</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23024665'/%3E%3Cpath d='M8 31 L32 11 L56 31' fill='none' stroke='%2300AB84' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M16 30 V52 H48 V30 L32 17 Z' fill='%23ffffff'/%3E%3Crect x='28' y='40' width='8' height='12' fill='%23024665'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Arbeitsblatt – Eingaben links (Basis, Hülle, WB), Ergebnis-Panel rechts sticky; mobil gestapelt */
+:root{
+  --bg:#f5f7f8; --panel:#ffffff; --fg:#1d2a33; --muted:#6B7680; --line:#dfe4e8;
+  --navy:#024665; --teal:#00AB84; --teal-soft:#e3f5ef; --changed:#fff6db;
+  --ok:#0a8a5f; --warn:#b77900; --bad:#c23b2e;
+  --ok-bg:#e4f4ec; --warn-bg:#fdf1d8; --bad-bg:#fbe5e2;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1a20; --panel:#16252d; --fg:#e4ecf0; --muted:#93a1ab; --line:#28404b;
+  --navy:#7cc4e6; --teal:#2fd0a4; --teal-soft:#123a33; --changed:#3a3218;
+  --ok:#3fd19a; --warn:#f0b54a; --bad:#ff7a6b; --ok-bg:#12352a; --warn-bg:#3a2d12; --bad-bg:#3d1c19; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1a20; --panel:#16252d; --fg:#e4ecf0; --muted:#93a1ab; --line:#28404b;
+  --navy:#7cc4e6; --teal:#2fd0a4; --teal-soft:#123a33; --changed:#3a3218;
+  --ok:#3fd19a; --warn:#f0b54a; --bad:#ff7a6b; --ok-bg:#12352a; --warn-bg:#3a2d12; --bad-bg:#3d1c19; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px;border-bottom:2px solid var(--teal);padding-bottom:12px}
+h1{margin:0;font-size:22px;color:var(--navy);letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px;max-width:62ch}
+.claim{font-size:12px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.claim b{color:var(--teal)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.col{display:flex;flex-direction:column;gap:18px;min-width:0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;min-width:0}
+h2{margin:0 0 4px;font-size:15px;color:var(--navy)}
+h2 small{font-weight:400;color:var(--muted);font-size:12px;margin-left:6px}
+.hint{color:var(--muted);font-size:12.5px;margin:0 0 12px;max-width:72ch}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 14px}
+label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+label span.u{font-family:var(--mono);font-size:11px}
+input,textarea,select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:6px 8px;min-width:0}
+input[type=number],input.num{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--teal);outline-offset:1px}
+textarea{width:100%;min-height:90px;font-family:var(--mono);font-size:12px}
+.tablewrap{overflow-x:auto;margin-inline:-4px}
+table{border-collapse:collapse;width:100%;min-width:640px;font-variant-numeric:tabular-nums}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:right;padding:6px 4px;border-bottom:1px solid var(--line);font-weight:600;white-space:nowrap}
+th:first-child{text-align:left}
+td{padding:3px 4px;border-bottom:1px solid var(--line)}
+td input{width:100%;padding:4px 6px}
+td.name input{text-align:left;font-family:var(--sans)}
+td.out{font-family:var(--mono);text-align:right;white-space:nowrap;font-size:12.5px}
+tr.chg td{background:var(--changed)}
+td.out.pos{color:var(--bad)} td.out.neg{color:var(--ok)}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+button{font:inherit;font-size:13px;cursor:pointer;border-radius:4px;padding:6px 12px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
+button.primary{background:var(--navy);border-color:var(--navy);color:var(--panel)}
+button.ghost{border-color:transparent;color:var(--muted);padding:2px 6px}
+button:hover{border-color:var(--teal)}
+details summary{cursor:pointer;color:var(--navy);font-size:13px;font-weight:500}
+details[open] summary{margin-bottom:8px}
+/* Ergebnis */
+aside{position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);display:flex;flex-direction:column;gap:12px}
+@media (max-width:900px){aside{position:static}}
+.verdict{border-radius:6px;padding:14px 16px;border:1px solid var(--line)}
+.verdict .big{font-size:18px;font-weight:700}
+.verdict.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.verdict.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+.verdict.bad{background:var(--bad-bg);color:var(--bad);border-color:var(--bad)}
+.verdict p{margin:4px 0 0;color:var(--fg);font-size:12.5px}
+.check{display:flex;flex-direction:column;gap:6px}
+.crow{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:8px 0;border-bottom:1px solid var(--line)}
+.crow:last-child{border-bottom:0}
+.crow .k{font-size:12.5px;font-weight:600}
+.crow .v{font-family:var(--mono);font-size:13px;text-align:right}
+.crow .d{grid-column:1/-1;display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+.pill{display:inline-block;font-family:var(--sans);font-size:11px;font-weight:600;border-radius:999px;padding:1px 8px}
+.pill.ok{background:var(--ok-bg);color:var(--ok)} .pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.bad{background:var(--bad-bg);color:var(--bad)} .pill.na{background:var(--bg);color:var(--muted)}
+.bar{grid-column:1/-1;height:6px;background:var(--bg);border-radius:3px;position:relative;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--teal);border-radius:3px}
+.bar i.over{background:var(--bad)}
+.warns{font-size:12px;color:var(--warn);display:flex;flex-direction:column;gap:4px}
+.warns:empty{display:none}
+.toast{font-size:12px;color:var(--ok);min-height:1em}
+.calib{font-size:12px;margin-top:8px;font-family:var(--mono)}
+.calib.ok{color:var(--ok)} .calib.warn{color:var(--warn)}
+@media (prefers-reduced-motion:no-preference){.bar i{transition:width .25s}}
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1.5px dashed var(--teal);border-radius:6px;padding:18px 12px;background:var(--teal-soft);color:var(--fg);cursor:pointer;text-align:center;font-size:13px}
+.drop.over{border-style:solid}
+.dropT b{color:var(--navy)}
+.dropN{font-family:var(--mono);font-size:12px;color:var(--muted);word-break:break-all}
+.impStatus{font-size:12.5px;margin-top:8px;color:var(--muted);white-space:pre-line}
+.impStatus.ok{color:var(--ok)} .impStatus.bad{color:var(--bad)}
+input.filled{background:var(--teal-soft);border-color:var(--teal)}
+select{width:100%}
+.brand{display:flex;align-items:center;gap:14px;min-width:0}
+.house{width:60px;height:auto;flex:none}
+.h-roof{fill:none;stroke:var(--navy);stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.h-ins{fill:none;stroke:var(--teal);stroke-width:3;stroke-dasharray:3 2.5}
+.h-wall{fill:var(--teal-soft);stroke:var(--navy);stroke-width:2;stroke-linejoin:round}
+.h-win{fill:var(--panel);stroke:var(--navy);stroke-width:1.5}
+.h-door{fill:var(--navy)}
+@media (max-width:480px){.house{width:44px}}
+/* Standard-Leiter */
+.lvl{display:grid;grid-template-columns:auto 1fr 1fr;gap:0;font-variant-numeric:tabular-nums}
+.lvl>div{padding:8px 6px;border-bottom:1px solid var(--line);font-size:12.5px;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.lvl .hd{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding-top:2px}
+.lvl .std{font-weight:700;color:var(--navy);font-size:13px;padding-right:12px}
+.lvl .std small{display:block;font-weight:400;color:var(--muted);font-size:11px;font-family:var(--mono)}
+.lvl .std.ziel{box-shadow:inset 3px 0 0 var(--teal);padding-left:9px}
+.lvl .c{font-family:var(--mono)}
+.lvl .c .mv{display:flex;align-items:center;gap:5px;font-size:12px}
+.lvl .c .rs{font-size:11px;color:var(--muted)}
+.mk{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;font-family:var(--sans);font-size:10px;font-weight:700;flex:none}
+.mk.ok{background:var(--ok-bg);color:var(--ok)} .mk.bad{background:var(--bad-bg);color:var(--bad)} .mk.warn{background:var(--warn-bg);color:var(--warn)}
+.lvl .row-lost>div{background:var(--bad-bg)}
+.niveau{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 12px;font-size:13px}
+.chip{font-weight:700;border-radius:4px;padding:3px 9px;font-size:13px;background:var(--bg);color:var(--navy);border:1px solid var(--line)}
+.chip.down{background:var(--bad-bg);color:var(--bad);border-color:var(--bad)}
+.chip.same{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.arrow{color:var(--muted)}
+/* Skalen % Referenz */
+.scale{margin-top:14px}
+.scale .lab{display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:22px}
+.scale .lab span:last-child{font-family:var(--mono);font-weight:400;color:var(--muted)}
+.track{position:relative;height:10px;border-radius:5px;background:linear-gradient(90deg,var(--ok-bg),var(--ok-bg))}
+.zone{position:absolute;top:0;bottom:0}
+.tick{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--navy);transform:translateX(-1px)}
+.tick b{position:absolute;top:-17px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:600;color:var(--navy);white-space:nowrap}
+.tick i{position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);font-style:normal;font-size:9.5px;color:var(--muted);font-family:var(--mono);white-space:nowrap}
+.dot{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;transform:translate(-50%,-50%);border:2.5px solid var(--fg);background:var(--panel)}
+.dot.neu{background:var(--fg);border-color:var(--panel);box-shadow:0 0 0 1.5px var(--fg)}
+.legend{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-top:26px}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend .dot{position:static;transform:none;width:10px;height:10px;border-width:2px}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg class="house" viewBox="0 0 64 56" role="img" aria-label="Gebäude-Symbol">
+        <path class="h-roof" d="M4 27 L32 5 L60 27" />
+        <path class="h-ins" d="M11 25 V51 H53 V25" />
+        <path class="h-wall" d="M14 26 V48 H50 V26 L32 12 Z" />
+        <rect class="h-win" x="19" y="30" width="8" height="7" rx="1" />
+        <rect class="h-win" x="37" y="30" width="8" height="7" rx="1" />
+        <rect class="h-door" x="28" y="38" width="8" height="10" rx="1" />
+      </svg>
+      <div>
+      <div class="claim"><b>■</b> Ingenieurbüro Kaufmann · Energieberatung</div>
+      <h1>GEG-Delta-Check</h1>
+      <div class="sub">Änderungen am fertigen Nachweis (Statik, Bauteiltausch, Wärmebrücken) gegen die Ergebnisse aus Hottgenroth hochrechnen – ohne Neuberechnung. Ersetzt nicht die Neuberechnung für die Abgabe.</div>
+      </div>
+    </div>
+    <input id="proj" placeholder="Projekt / Variante, z. B. 2611 – Attika Stahlbeton" style="min-width:0;width:min(340px,100%)">
+  </header>
+
+  <div class="grid">
+    <div class="col">
+      <section id="importSec">
+        <h2>Nachweis einlesen <small>PDF aus Hottgenroth</small></h2>
+        <p class="hint">Nachweis-PDF hier ablegen (Ergebnisübersicht und Bauteil-/Hüllflächenliste). Claude liest die Kennwerte und die Hüllfläche aus und füllt die Felder unten. Danach Werte kurz gegen das PDF prüfen.</p>
+        <label id="drop" class="drop" for="pdfIn">
+          <input id="pdfIn" type="file" accept="application/pdf,.pdf" multiple hidden>
+          <span class="dropT"><b>PDF auswählen</b> oder hierher ziehen</span>
+          <span id="pdfName" class="dropN"></span>
+        </label>
+        <div class="btns"><button id="doImport" class="primary" type="button" disabled>Werte auslesen</button><button id="stopImport" type="button" hidden>Stopp</button></div>
+        <div id="impMode" class="impStatus" style="margin-top:4px"></div>
+        <div id="impStatus" class="impStatus"></div>
+      </section>
+
+      <section>
+        <h2>1 · Ergebnisse aus dem Nachweis <small>Hottgenroth, Stand vor der Änderung</small></h2>
+        <p class="hint">Werte aus der Ergebnisübersicht übernehmen. Die Referenzwerte sind die des Referenzgebäudes (100 %). Daraus ergeben sich die Grenzen für GModG (Qp 55 %, H'T 100 %), EH 55 (55 % / 70 %) und EH 40 (40 % / 55 %).</p>
+        <div class="fields">
+          <label>AN Gebäudenutzfläche <span class="u">m²</span><input id="AN" class="num" inputmode="decimal"></label>
+          <label>Qp Ist <span class="u">kWh/(m²a)</span><input id="Qp" class="num" inputmode="decimal"></label>
+          <label>Qp Referenzgebäude <span class="u">kWh/(m²a)</span><input id="QpRef" class="num" inputmode="decimal"></label>
+          <label>H'T Ist <span class="u">W/(m²K)</span><input id="HTist" class="num" inputmode="decimal"></label>
+          <label>H'T Referenzgebäude <span class="u">W/(m²K)</span><input id="HTref" class="num" inputmode="decimal"></label>
+          <label>Qh Heizwärmebedarf <span class="u">kWh/a</span><input id="Qh" class="num" inputmode="decimal"></label>
+          <label>Zielstandard
+            <select id="ziel"><option value="GModG">GModG (Mindeststandard)</option><option value="EH55">EH 55</option><option value="EH40">EH 40</option></select>
+          </label>
+        </div>
+        <details style="margin-top:12px">
+          <summary>Hochrechnungs-Parameter</summary>
+          <div class="fields">
+            <label>Heizgradstunden Gt <span class="u">kKh/a</span><input id="Gt" class="num" inputmode="decimal"></label>
+            <label>Ausnutzung Mehrverlust <span class="u">–</span><input id="fn" class="num" inputmode="decimal"></label>
+            <label>Primärenergie je kWh Qh (ep,h) <span class="u">–</span><input id="eph" class="num" inputmode="decimal"></label>
+          </div>
+          <p class="hint" style="margin-top:8px">ΔQh = ΔHT · Gt · Ausnutzung. ΔQp = ΔQh · ep,h / AN. ep,h grob: WP ≈ 1,8 / JAZ (z. B. 0,5 bei JAZ 3,6), Pellet ≈ 0,3, Gas ≈ 1,2. Gt ≈ 66 kKh/a (Referenzklima Potsdam, ohne Heizgrenze); Ausnutzung &lt; 1 berücksichtigt, dass nicht jeder Mehrverlust voll durchschlägt.</p>
+        </details>
+      </section>
+
+      <section>
+        <h2>2 · Hüllfläche <small>Bauteile, Fx, U alt → U neu</small></h2>
+        <p class="hint">Zeilen aus der Hottgenroth-Bauteilliste kopieren und hier einfügen (Spalten: Bezeichnung · Fläche · U-Wert · Fx; Fx fehlt → 1,0). Danach U neu oder Fläche neu ändern; geänderte Zeilen werden gelb.</p>
+        <details>
+          <summary>Aus Hottgenroth einfügen</summary>
+          <textarea id="paste" placeholder="AW Nord&#9;48,20&#9;0,140&#9;1,0&#10;Dach&#9;112,5&#9;0,120&#9;1,0&#10;Bodenplatte&#9;98,0&#9;0,180&#9;0,6"></textarea>
+          <div class="btns"><button id="doPaste" class="primary" type="button">Übernehmen (ersetzt Tabelle)</button></div>
+        </details>
+        <div class="tablewrap" style="margin-top:10px">
+          <table>
+            <thead><tr><th>Bauteil</th><th>A alt m²</th><th>U alt</th><th>Fx</th><th>A neu m²</th><th>U neu</th><th>H alt W/K</th><th>Δ H W/K</th><th></th></tr></thead>
+            <tbody id="tb"></tbody>
+          </table>
+        </div>
+        <div class="btns"><button id="addRow" type="button">+ Bauteil</button><button id="splitHint" type="button">+ Teilfläche (z. B. Stütze, Ringbalken)</button></div>
+        <div id="calib" class="calib"></div>
+      </section>
+
+      <section>
+        <h2>3 · Wärmebrücken</h2>
+        <p class="hint">Pauschaler Zuschlag ΔUWB auf die gesamte Hüllfläche, plus zusätzliche lineare Wärmebrücken (Ψ · l · Fx), etwa aus einem auskragenden Träger oder geänderten Anschluss.</p>
+        <div class="fields">
+          <label>ΔUWB alt <span class="u">W/(m²K)</span><input id="wbAlt" class="num" inputmode="decimal"></label>
+          <label>ΔUWB neu <span class="u">W/(m²K)</span><input id="wbNeu" class="num" inputmode="decimal"></label>
+        </div>
+        <div class="tablewrap" style="margin-top:10px">
+          <table style="min-width:480px">
+            <thead><tr><th>Zusätzliche Wärmebrücke</th><th>Ψ W/(mK)</th><th>l m</th><th>Fx</th><th>Δ H W/K</th><th></th></tr></thead>
+            <tbody id="tbPsi"></tbody>
+          </table>
+        </div>
+        <div class="btns"><button id="addPsi" type="button">+ Wärmebrücke</button></div>
+      </section>
+    </div>
+
+    <aside>
+      <div id="verdict" class="verdict"></div>
+      <section id="levels"></section>
+      <section class="check" id="checks"></section>
+      <div id="warns" class="warns"></div>
+      <section>
+        <h2>Zusammenfassung</h2>
+        <p class="hint" style="margin-bottom:8px">Text für Aktennotiz oder Mail an Statik / Architekt.</p>
+        <textarea id="summary" readonly style="min-height:150px"></textarea>
+        <div class="btns"><button id="copy" class="primary" type="button">Kopieren</button><button id="reset" type="button">Beispiel laden</button><button id="clear" type="button">Leeren</button></div>
+        <div id="toast" class="toast"></div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const num=v=>{if(v==null)return NaN;let s=String(v).trim().replace(/\s/g,'');if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');return s===''?NaN:parseFloat(s)};
+const fmt=(v,d=3)=>isFinite(v)?v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d}):'–';
+const sgn=(v,d)=>isFinite(v)?(v>0?'+':v<0?'−':'±')+fmt(Math.abs(v),d):'–';
+const BASE=['AN','HTist','HTref','Qp','QpRef','Qh','ziel','Gt','fn','eph','wbAlt','wbNeu','proj'];
+// Anforderungen in % des Referenzgebäudes (Qp, H'T)
+const STD=[
+  {k:'GModG',name:'GModG',sub:'Neubau-Mindeststandard',qp:55,ht:100},
+  {k:'EH55',name:'EH 55',sub:'KfW-Effizienzhaus',qp:55,ht:70},
+  {k:'EH40',name:'EH 40',sub:'KfW-Effizienzhaus',qp:40,ht:55},
+];
+
+const EXAMPLE={
+  base:{proj:'Beispiel EFH – Statik: Dämmung Dach 18 → 16 cm, Stahlbetonstützen in AW Süd',AN:'186,4',HTist:'0,245',HTref:'0,450',Qp:'20,9',QpRef:'54,5',Qh:'8450',ziel:'EH40',Gt:'66',fn:'0,9',eph:'0,50',wbAlt:'0,035',wbNeu:'0,035'},
+  rows:[
+    ['Außenwand Nord','52,30','0,150','1,0','','',],
+    ['Außenwand Süd','48,10','0,150','1,0','44,90',''],
+    ['Außenwand Süd – Stahlbetonstützen','','0,150','1,0','3,20','0,310'],
+    ['Außenwand Ost/West','86,40','0,150','1,0','',''],
+    ['Fenster/Türen','41,80','0,900','1,0','',''],
+    ['Dach','118,20','0,140','1,0','','0,158'],
+    ['Bodenplatte','104,60','0,200','0,6','',''],
+  ],
+  psi:[['Attika Stahlbeton (neu)','0,060','24,0','1,0']]
+};
+
+function rowHTML(r=[]){
+  const [n='',a='',u='',fx='1,0',an='',un='']=r;
+  return `<tr><td class="name"><input value="${n.replace(/"/g,'&quot;')}" aria-label="Bauteil"></td>
+  <td><input class="num" inputmode="decimal" value="${a}" aria-label="Fläche alt"></td>
+  <td><input class="num" inputmode="decimal" value="${u}" aria-label="U alt"></td>
+  <td><input class="num" inputmode="decimal" value="${fx}" aria-label="Fx"></td>
+  <td><input class="num" inputmode="decimal" value="${an}" placeholder="=" aria-label="Fläche neu"></td>
+  <td><input class="num" inputmode="decimal" value="${un}" placeholder="=" aria-label="U neu"></td>
+  <td class="out h"></td><td class="out dh"></td><td><button class="ghost del" type="button" aria-label="Zeile löschen">✕</button></td></tr>`;
+}
+function psiHTML(r=[]){
+  const [n='',p='',l='',fx='1,0']=r;
+  return `<tr><td class="name"><input value="${n.replace(/"/g,'&quot;')}" aria-label="Bezeichnung"></td>
+  <td><input class="num" inputmode="decimal" value="${p}" aria-label="Psi"></td>
+  <td><input class="num" inputmode="decimal" value="${l}" aria-label="Länge"></td>
+  <td><input class="num" inputmode="decimal" value="${fx}" aria-label="Fx"></td>
+  <td class="out dh"></td><td><button class="ghost del" type="button" aria-label="Zeile löschen">✕</button></td></tr>`;
+}
+
+function load(d){
+  BASE.forEach(k=>{$(k).value=d.base[k]??''});
+  if(!$('ziel').value)$('ziel').value='GModG';
+  $('tb').innerHTML=d.rows.map(rowHTML).join('');
+  $('tbPsi').innerHTML=d.psi.map(psiHTML).join('');
+  calc();
+}
+function state(){
+  const base={};BASE.forEach(k=>base[k]=$(k).value);
+  const rows=[...$('tb').rows].map(tr=>[...tr.querySelectorAll('input')].map(i=>i.value));
+  const psi=[...$('tbPsi').rows].map(tr=>[...tr.querySelectorAll('input')].map(i=>i.value));
+  return {base,rows,psi};
+}
+
+function pill(cls,t){return `<span class="pill ${cls}">${t}</span>`}
+
+function calc(){
+  const AN=num($('AN').value),HTist=num($('HTist').value),Qp=num($('Qp').value),Qh=num($('Qh').value);
+  const Gt=num($('Gt').value)||66,fn=isFinite(num($('fn').value))?num($('fn').value):0.9,eph=num($('eph').value);
+  const wbA=num($('wbAlt').value)||0,wbN=isFinite(num($('wbNeu').value))?num($('wbNeu').value):wbA;
+  let Aalt=0,Aneu=0,Halt=0,Hneu=0,changed=[];
+  [...$('tb').rows].forEach(tr=>{
+    const v=[...tr.querySelectorAll('input')].map(i=>i.value);
+    const a=num(v[1])||0,u=num(v[2])||0,fx=isFinite(num(v[3]))?num(v[3]):1;
+    const an=isFinite(num(v[4]))?num(v[4]):a,un=isFinite(num(v[5]))?num(v[5]):u;
+    const h0=a*u*fx,h1=an*un*fx,dh=h1-h0;
+    Aalt+=a;Aneu+=an;Halt+=h0;Hneu+=h1;
+    tr.querySelector('.h').textContent=fmt(h0,2);
+    const c=tr.querySelector('.dh');c.textContent=Math.abs(dh)<0.005?'':sgn(dh,2);
+    c.className='out dh '+(dh>0.005?'pos':dh<-0.005?'neg':'');
+    const isChg=Math.abs(dh)>=0.005||v[4].trim()!==''||v[5].trim()!=='';
+    tr.classList.toggle('chg',isChg);
+    if(Math.abs(dh)>=0.005)changed.push({n:v[0]||'Bauteil',a,an,u,un,dh});
+  });
+  let Hpsi=0;
+  [...$('tbPsi').rows].forEach(tr=>{
+    const v=[...tr.querySelectorAll('input')].map(i=>i.value);
+    const p=num(v[1])||0,l=num(v[2])||0,fx=isFinite(num(v[3]))?num(v[3]):1,dh=p*l*fx;
+    Hpsi+=dh;tr.querySelector('.dh').textContent=dh?sgn(dh,2):'';
+    tr.querySelector('.dh').className='out dh '+(dh>0?'pos':dh<0?'neg':'');
+    if(dh)changed.push({n:(v[0]||'Wärmebrücke')+` (Ψ ${v[1]} · ${v[2]} m)`,dh,psi:true});
+  });
+  const HTa=Halt+wbA*Aalt, HTn=Hneu+wbN*Aneu+Hpsi;
+  const HTcalcAlt=Aalt?HTa/Aalt:NaN;
+  // Kalibrierung: Abweichung Tabelle vs. Hottgenroth-H'T auf die neue Rechnung übertragen
+  const corr=isFinite(HTist)&&isFinite(HTcalcAlt)?HTist-HTcalcAlt:0;
+  const HTpAlt=isFinite(HTist)?HTist:HTcalcAlt;
+  const HTpNeu=Aneu?HTn/Aneu+corr:NaN;
+  const dHT=HTn-HTa;
+  const dQh=dHT*Gt*fn;
+  const QhN=isFinite(Qh)?Qh+dQh:NaN;
+  const dQp=isFinite(eph)&&AN?dQh*eph/AN:NaN;
+  const QpN=isFinite(Qp)&&isFinite(dQp)?Qp+dQp:NaN;
+
+  const cal=$('calib');
+  if(isFinite(HTist)&&isFinite(HTcalcAlt)){
+    const dev=(HTcalcAlt-HTist)/HTist*100;
+    cal.className='calib '+(Math.abs(dev)<=2?'ok':'warn');
+    cal.textContent=`Kontrolle: H'T aus Tabelle ${fmt(HTcalcAlt)} vs. Hottgenroth ${fmt(HTist)} W/(m²K) → Abweichung ${sgn(dev,1)} %`+(Math.abs(dev)>2?' · Tabelle unvollständig? Differenz wird als Offset mitgeführt.':' · passt.');
+  }else cal.textContent='';
+
+  // ---- Standards: Anteile am Referenzgebäude ----
+  const QpRef=num($('QpRef').value),HTref=num($('HTref').value);
+  const pct=(v,r)=>isFinite(v)&&isFinite(r)&&r>0?v/r*100:NaN;
+  const qA=pct(Qp,QpRef),qN=pct(QpN,QpRef),hA=pct(HTpAlt,HTref),hN=pct(HTpNeu,HTref);
+  const haveQ=isFinite(qA),haveH=isFinite(hA);
+  // Reserve in Prozentpunkten des Grenzwerts
+  const res=(v,lim)=>isFinite(v)?(lim-v)/lim*100:NaN;
+  const evalStd=s=>{
+    const rq=res(isFinite(qN)?qN:qA,s.qp),rh=res(hN,s.ht);
+    const okA=(!haveQ||qA<=s.qp)&&(!haveH||hA<=s.ht);
+    const rs=[rq,rh].filter(isFinite);const r=rs.length?Math.min(...rs):NaN;
+    return {...s,okA:(haveQ||haveH)&&okA,okN:isFinite(r)&&r>=0,r,rq,rh};
+  };
+  const ev=STD.map(evalStd);
+  const best=arr=>{let b=null;arr.forEach(e=>{if(e)b=e});return b};
+  const lvA=best(ev.map(e=>e.okA?e:null)),lvN=best(ev.map(e=>e.okN?e:null));
+  const ziel=ev.find(e=>e.k===$('ziel').value)||ev[0];
+  const rel=HTa?Math.abs(dHT/HTa*100):0;
+
+  // Verdict
+  const v=$('verdict');let title,cls,text;
+  if(!haveQ&&!haveH){cls='';title='Referenzwerte eintragen';text="Qp und H'T des Referenzgebäudes aus dem Nachweis eintragen, dann erscheint die Einstufung."}
+  else if(!ziel.okN){cls='bad';title=`${ziel.name} wird verfehlt`;text=`${isFinite(ziel.rh)&&ziel.rh<0?"H'T":"Qp"} liegt über der Grenze. Kompensation prüfen (Dämmstärke, Fenster, Wärmebrücken, Anlagentechnik) und in Hottgenroth neu rechnen.`}
+  else if(ziel.r<3||rel>10){cls='warn';title=`${ziel.name} knapp – gegenrechnen`;text=rel>10?'Die Änderung ist größer als 10 % von HT, die Näherung wird ungenau.':`Nur ${fmt(ziel.r,1)} % Reserve zur Grenze. Für eine sichere Aussage in Hottgenroth nachrechnen.`}
+  else{cls='ok';title=`${ziel.name} hält voraussichtlich`;text=`Kleinste Reserve ${fmt(ziel.r,1)} %. Für die Abgabe trotzdem im Nachweis nachziehen.`}
+  v.className='verdict '+cls;v.innerHTML=`<div class="big">${title}</div><p>${text}</p>`;
+
+  // Standard-Leiter
+  let L2='<h2>Einstufung</h2>';
+  if(haveQ||haveH){
+    const nm=e=>e?e.name:'unter GModG';
+    const down=lvA&&(!lvN||ev.indexOf(lvN)<ev.indexOf(lvA));
+    L2+=`<div class="niveau"><span class="chip">${nm(lvA)}</span><span class="arrow">→</span><span class="chip ${down?'down':'same'}">${nm(lvN)}</span><span style="color:var(--muted);font-size:12px">vorher → nach Änderung</span></div>`;
+    const cell=(a,n,lim,unit)=>{
+      if(!isFinite(a))return `<div class="c"><span class="rs">–</span></div>`;
+      const nn=isFinite(n)?n:a,okN=nn<=lim,r=res(nn,lim);
+      const c=!okN?'bad':r<3?'warn':'ok';
+      return `<div class="c"><span class="mv"><span class="mk ${c}">${okN?'✓':'✕'}</span>${fmt(a,1)} → ${fmt(nn,1)} %</span><span class="rs">Grenze ${lim} % · Reserve ${sgn(r,1)} %</span></div>`;
+    };
+    L2+=`<div class="lvl"><div class="hd">Standard</div><div class="hd">Qp / Qp,Ref</div><div class="hd">H'T / H'T,Ref</div>`;
+    ev.slice().reverse().forEach(e=>{
+      const lost=e.okA&&!e.okN;
+      L2+=`<div class="std ${e.k===ziel.k?'ziel':''}${lost?' lostc':''}" style="${lost?'background:var(--bad-bg)':''}">${e.name}<small>${e.qp} % · ${e.ht} %</small></div>`+
+        cell(qA,qN,e.qp).replace('<div class="c"',lost?'<div class="c" style="background:var(--bad-bg)"':'<div class="c"')+
+        cell(hA,hN,e.ht).replace('<div class="c"',lost?'<div class="c" style="background:var(--bad-bg)"':'<div class="c"');
+    });
+    L2+='</div>';
+    // Skalen
+    const scale=(lab,a,n,ticks,unitTxt)=>{
+      if(!isFinite(a))return '';
+      const max=Math.max(110,Math.ceil(Math.max(a,isFinite(n)?n:0)/10)*10+10);
+      const x=p=>Math.max(0,Math.min(100,p/max*100));
+      const tk=[...new Set(ticks.map(t=>t.v))].map(val=>{
+        const names=ticks.filter(t=>t.v===val).map(t=>t.n).join(' / ');
+        return `<span class="tick" style="left:${x(val)}%"><b>${names}</b><i>${val} %</i></span>`}).join('');
+      const worst=Math.max(...ticks.map(t=>t.v));
+      const zones=`<span class="zone" style="left:${x(worst)}%;right:0;background:var(--bad-bg);border-radius:0 5px 5px 0"></span>`;
+      const nn=isFinite(n)?n:a;
+      return `<div class="scale"><div class="lab"><span>${lab}</span><span>${fmt(a,1)} → ${fmt(nn,1)} % ${unitTxt}</span></div>
+        <div class="track">${zones}${tk}<span class="dot" style="left:${x(a)}%" title="vorher"></span><span class="dot neu" style="left:${x(nn)}%" title="nach Änderung"></span></div></div>`;
+    };
+    L2+=scale('Primärenergie Qp',qA,qN,[{v:40,n:'EH 40'},{v:55,n:'EH 55 · GModG'}],'von Ref.');
+    L2+=scale("Transmission H'T",hA,hN,[{v:55,n:'EH 40'},{v:70,n:'EH 55'},{v:100,n:'GModG'}],'von Ref.');
+    L2+=`<div class="legend"><span><span class="dot"></span>vorher</span><span><span class="dot neu"></span>nach Änderung</span></div>`;
+  }else L2+='<p class="hint">Referenzwerte fehlen.</p>';
+  $('levels').innerHTML=L2;
+
+  let html='<h2>Kennwerte</h2>';
+  const kv=(k,a,n,d,unit)=>`<div class="crow"><div class="k">${k}</div><div class="v">${fmt(n,d)}</div><div class="d"><span>vorher ${fmt(a,d)} ${unit}</span><span>${sgn(n-a,d)}</span></div></div>`;
+  html+=kv('Qp',Qp,QpN,1,'kWh/(m²a)');
+  html+=kv("H'T",HTpAlt,HTpNeu,3,'W/(m²K)');
+  html+=kv('Qh Heizwärme',Qh,QhN,0,'kWh/a');
+  html+=`<div class="crow"><div class="k">Δ HT gesamt</div><div class="v">${sgn(dHT,2)}</div><div class="d"><span>W/K · Hüllfläche ${fmt(Aalt,1)} → ${fmt(Aneu,1)} m²</span><span>${HTa?sgn(dHT/HTa*100,1)+' %':''}</span></div></div>`;
+  $('checks').innerHTML=html;
+
+  const w=[];
+  if(!isFinite(eph))w.push('ep,h fehlt → Qp wird nicht hochgerechnet.');
+  if(!isFinite(Qh))w.push('Qh fehlt → keine Aussage zum Heizwärmebedarf.');
+  if(Math.abs(Aneu-Aalt)>0.5)w.push('Hüllfläche ändert sich: Bei Änderung von Volumen oder AN in Hottgenroth neu rechnen.');
+  $('warns').innerHTML=w.map(x=>'⚠ '+x).join('<br>');
+
+  // Zusammenfassung
+  const L=[];
+  L.push(`GEG-Delta-Check${$('proj').value?' – '+$('proj').value:''}`);
+  L.push(`Stand ${new Date().toLocaleDateString('de-DE')} · Näherung auf Basis Hottgenroth-Nachweis, keine Neuberechnung`);
+  L.push('');L.push('Änderungen:');
+  changed.forEach(c=>L.push(c.psi?`- ${c.n}: ΔH ${sgn(c.dh,2)} W/K`:`- ${c.n}: `+(c.a!==c.an?`A ${fmt(c.a,2)} → ${fmt(c.an,2)} m², `:'')+(c.u!==c.un?`U ${fmt(c.u)} → ${fmt(c.un)} W/(m²K), `:'')+`ΔH ${sgn(c.dh,2)} W/K`));
+  if(wbN!==wbA)L.push(`- ΔUWB ${fmt(wbA)} → ${fmt(wbN)} W/(m²K)`);
+  if(!changed.length&&wbN===wbA)L.push('- keine');
+  L.push('');L.push('Ergebnis:');
+  if(isFinite(QpN))L.push(`- Qp: ${fmt(Qp,1)} → ${fmt(QpN,1)} kWh/(m²a)`+(haveQ?` (${fmt(qA,1)} → ${fmt(qN,1)} % von Qp,Ref)`:''));
+  if(isFinite(HTpNeu))L.push(`- H'T: ${fmt(HTpAlt)} → ${fmt(HTpNeu)} W/(m²K)`+(haveH?` (${fmt(hA,1)} → ${fmt(hN,1)} % von H'T,Ref)`:''));
+  if(isFinite(QhN))L.push(`- Qh: ${fmt(Qh,0)} → ${fmt(QhN,0)} kWh/a`);
+  if(haveQ||haveH){
+    L.push('');L.push('Einstufung:');
+    L.push(`- vorher: ${lvA?lvA.name:'unter GModG'} · nach Änderung: ${lvN?lvN.name:'unter GModG'}`);
+    ev.forEach(e=>L.push(`- ${e.name} (Qp ≤ ${e.qp} %, H'T ≤ ${e.ht} %): ${e.okN?'eingehalten':'verfehlt'}${isFinite(e.r)?`, Reserve ${sgn(e.r,1)} %`:''}`));
+  }
+  L.push('');L.push('Bewertung: '+title+'.');
+  $('summary').value=L.join('\n');
+
+  try{localStorage.setItem('gegDelta2',JSON.stringify(state()))}catch(e){}
+}
+
+// Events
+document.addEventListener('change',e=>{if(e.target.id==='ziel')calc()});
+document.addEventListener('input',e=>{if(e.target.id!=='paste'&&e.target.id!=='summary')calc()});
+document.addEventListener('click',e=>{
+  if(e.target.classList.contains('del')){e.target.closest('tr').remove();calc()}
+});
+$('addRow').onclick=()=>{$('tb').insertAdjacentHTML('beforeend',rowHTML());calc()};
+$('splitHint').onclick=()=>{$('tb').insertAdjacentHTML('beforeend',rowHTML(['Teilfläche (neu)','','','1,0','','']));calc();
+  const r=$('tb').lastElementChild.querySelectorAll('input');r[0].focus();r[0].select()};
+$('addPsi').onclick=()=>{$('tbPsi').insertAdjacentHTML('beforeend',psiHTML());calc()};
+$('doPaste').onclick=()=>{
+  const rows=$('paste').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>{
+    let parts=l.split(/\t|;|\s{2,}/).map(s=>s.trim()).filter(Boolean);
+    if(parts.length<2)parts=l.split(/\s+/);
+    const name=[],nums=[];
+    parts.forEach(p=>{
+      const c=p.replace(/m²|W\/\(m²K\)/g,'').trim();
+      if(/^-?[\d.,]+$/.test(c)&&isFinite(num(c)))nums.push(c);
+      else if(!nums.length)name.push(p);
+    });
+    return nums.length>=2?[name.join(' ')||'Bauteil',nums[0],nums[1],nums[2]||'1,0','','']:null;
+  }).filter(Boolean);
+  if(!rows.length){toast('Keine Zeilen mit Fläche und U-Wert erkannt.',true);return}
+  $('tb').innerHTML=rows.map(rowHTML).join('');calc();toast(`${rows.length} Bauteile übernommen.`);
+};
+$('copy').onclick=()=>{
+  const t=$('summary').value;
+  navigator.clipboard?.writeText(t).then(()=>toast('Kopiert.')).catch(()=>{$('summary').select();toast('Text markiert – mit Strg+C kopieren.')})
+    ?? ($('summary').select(),toast('Text markiert – mit Strg+C kopieren.'));
+};
+$('reset').onclick=()=>{load(EXAMPLE);toast('Beispiel geladen.')};
+$('clear').onclick=()=>{load({base:{Gt:'66',fn:'0,9',ziel:'GModG',wbAlt:'',wbNeu:''},rows:[[],[],[]],psi:[]});toast('Geleert.')};
+function toast(t,err){const el=$('toast');el.style.color=err?'var(--bad)':'';el.textContent=t;clearTimeout(toast.t);toast.t=setTimeout(()=>el.textContent='',3000)}
+
+// ---------- PDF einlesen ----------
+try{pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"}catch(e){}
+let files=[],ctl=null,sampleFn=null;
+const impS=(t,c='')=>{const el=$('impStatus');el.textContent=t;el.className='impStatus '+c};
+function setFiles(fl){files=[...fl].filter(f=>/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name));
+  $('pdfName').textContent=files.map(f=>f.name).join(' · ');$('doImport').disabled=!files.length;}
+$('pdfIn').onchange=e=>setFiles(e.target.files);
+const dz=$('drop');
+['dragenter','dragover'].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.add('over')}));
+['dragleave','drop'].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.remove('over')}));
+dz.addEventListener('drop',e=>setFiles(e.dataTransfer.files));
+
+(async()=>{
+  try{sampleFn=await window.claude?.use('sample')}catch(e){sampleFn=null}
+  $('impMode').textContent=sampleFn?'Auslesen mit Claude':'Ohne Claude-Verbindung: Auslesen per Mustererkennung im Browser – Werte bitte prüfen';
+})();
+
+async function readPdf(file){
+  const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
+  const pages=[];
+  for(let i=1;i<=pdf.numPages;i++){
+    const p=await pdf.getPage(i);const tc=await p.getTextContent();
+    // Zeilen anhand y-Position rekonstruieren, damit Tabellen lesbar bleiben
+    const lines=new Map();
+    tc.items.forEach(it=>{const y=Math.round(it.transform[5]);const k=[...lines.keys()].find(k=>Math.abs(k-y)<3)??y;
+      (lines.get(k)||lines.set(k,[]).get(k)).push({x:it.transform[4],s:it.str})});
+    const txt=[...lines.entries()].sort((a,b)=>b[0]-a[0]).map(([,a])=>a.sort((p,q)=>p.x-q.x).map(o=>o.s).join('\t').replace(/\t\s*\t/g,'\t')).join('\n');
+    pages.push({i,txt,p});
+  }
+  return {pdf,pages};
+}
+async function pageImages(docs,max){
+  const out=[];
+  for(const d of docs)for(const pg of d.pages){
+    if(out.length>=max)return out;
+    const vp=pg.p.getViewport({scale:1.6});const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;
+    await pg.p.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+    out.push(await new Promise(r=>c.toBlob(r,'image/jpeg',.85)));
+  }
+  return out;
+}
+
+const PROMPT=`Du bekommst den Inhalt eines GEG-Nachweises (Wohngebäude, DIN V 18599) aus der Software Hottgenroth/ETU.
+Lies die folgenden Werte aus. Gib Zahlen als Zahl mit Punkt als Dezimaltrenner zurück, fehlende Werte als null. Nichts schätzen oder erfinden.
+
+Antworte NUR mit einem JSON-Objekt dieser Form:
+{"AN":Gebäudenutzfläche m², "HTist":H'T Ist W/(m²K), "HTref":H'T des Referenzgebäudes W/(m²K) (100 %-Wert, nicht ein reduzierter Förder-Grenzwert),
+ "HTmax":zulässiger H'T-Höchstwert nach GEG/GModG W/(m²K),
+ "Qp":Jahres-Primärenergiebedarf Ist kWh/(m²a), "QpRef":Jahres-Primärenergiebedarf des Referenzgebäudes kWh/(m²a) (100 %-Wert),
+ "Qpmax":zulässiger Jahres-Primärenergiebedarf nach GEG/GModG kWh/(m²a),
+ "Qh":Heizwärmebedarf des Gebäudes in kWh/a (falls nur spezifisch in kWh/(m²a) angegeben: mit AN multiplizieren),
+ "QpH":Primärenergiebedarf nur für Heizung absolut in kWh/a falls ausgewiesen sonst null,
+ "wb":Wärmebrückenzuschlag ΔUWB W/(m²K),
+ "bauteile":[{"name":"Bezeichnung","A":Fläche m²,"U":U-Wert W/(m²K),"Fx":Temperatur-Korrekturfaktor (falls nicht angegeben 1)}],
+ "hinweise":"kurze Bemerkung auf Deutsch, was unsicher war oder fehlte (max. 2 Sätze)"}
+
+Hottgenroth-Formular: Kap. 3.2 (Qp zulässig ⇔ berechnet), Kap. 3.3 (H'T zulässig ⇔ berechnet), Kap. 6.1 Tabelle „spezifische Transmissionswärmeverluste“ (Fläche A, Ui-Wert, Faktor Fx), Wärmebrückenzuschlag ΔUWB, Kap. 7.2 Ergebnisse (Spalte HEIZUNG: absoluter Bedarf = Qh, Σ PRIMÄRENERGIE = QpH).
+Für "bauteile": jede Hüllflächen-Position der Bauteil-/Hüllflächenliste einzeln, so wie im Nachweis. Keine Summenzeilen.`;
+
+$('doImport').onclick=async()=>{
+  if(!files.length)return;
+  ctl=new AbortController();$('doImport').disabled=true;$('stopImport').hidden=false;
+  try{
+    impS('PDF wird gelesen …');
+    const docs=[];for(const f of files)docs.push(await readPdf(f));
+    let text=docs.map((d,n)=>d.pages.map(p=>`--- ${files[n].name} · Seite ${p.i} ---\n${p.txt}`).join('\n')).join('\n').slice(0,180000);
+    const hr=hottExtract(text);
+    if(hr){applyImport(hr);return}
+    if(!sampleFn){localImport(text);return}
+    const opts={signal:ctl.signal,modelTier:'default'};
+    if(text.replace(/\s/g,'').length<400){
+      const lim=await sampleFn.limits().catch(()=>null);
+      if(!lim?.images){impS('Das PDF enthält keinen lesbaren Text (Scan?). Bitte Werte manuell eintragen.','bad');return}
+      opts.images=await pageImages(docs,Math.min(lim.images.maxCount,8));
+      text='(Das PDF ist gescannt; die Seiten sind als Bilder beigefügt.)';
+      impS('Gescanntes PDF – Seiten werden als Bild an Claude übergeben …');
+    }else impS('Claude liest die Werte aus … (dauert meist 20–60 s)');
+    const r=await sampleFn.json(PROMPT+'\n\nINHALT:\n'+text,opts);
+    applyImport(r);
+  }catch(e){
+    const m={cancelled:'Abgebrochen.',not_granted:'Zugriff auf Claude wurde nicht erlaubt.',rate_limited:'Zu viele Anfragen – bitte gleich nochmal.',invalid_json:'Antwort war nicht auswertbar – bitte nochmal versuchen.',prompt_too_large:'PDF ist zu groß – nur Ergebnisübersicht und Bauteilliste einlesen.'};
+    impS(m[e?.code]||('Einlesen fehlgeschlagen'+(e?.message?': '+e.message:'.')),'bad');
+    if(['not_granted','sampling_disabled','capability_disabled'].includes(e?.code)){sampleFn=null;$('impMode').textContent='Ohne Claude: Auslesen per Mustererkennung im Browser';impS('Claude nicht verfügbar – bitte nochmal auf „Werte auslesen“ klicken, dann wird lokal ausgelesen.','bad')}
+  }finally{$('doImport').disabled=!files.length;$('stopImport').hidden=true;ctl=null}
+};
+$('stopImport').onclick=()=>ctl?.abort();
+
+// ---------- Hottgenroth „Energieberater Wohnen & Gewerbe“ – GEG-Berechnung ----------
+// Liest das Standardformular direkt aus (ohne Claude): 3.2/3.3 Kennwerte, 6.1 Hüllfläche, 7.2 Ergebnisse
+function hottExtract(text){
+  if(!/Energieberater Wohnen|Hottgenroth/i.test(text)||!/Transmissionsw[äa]rmeverluste der Heizperiode/i.test(text))return null;
+  const S=text.replace(/\s+/g,' ');
+  const nde=t=>t==null?NaN:(/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(t)?num(t.replace(/\./g,'')):num(t));
+  const g=(re,i=1)=>{const m=S.match(re);return m?nde(m[i]):NaN};
+  const r={};
+  r.AN=g(/Geb[äa]udenutzfl[äa]che\s*:\s*([\d.]+,\d+)\s*m/);
+  if(!isFinite(r.AN))r.AN=g(/Geb[äa]udenutzfl[äa]che A\s*N?\s*([\d.]+,\d+)/);
+  const qp=S.match(/Jahres-Prim[äa]renergiebedarf Zul[äa]ssiger H[öo]chstwert Berechneter Wert ([\d.,]+) kWh\S*\s*\S{0,3}\s*([\d.,]+) kWh/);
+  if(qp){r.Qpmax=nde(qp[1]);r.Qp=nde(qp[2])}
+  const qpq=g(/\bq\s*P?\s*=\s*([\d.,]+)\s*kWh\/m²a/);if(isFinite(qpq))r.Qp=qpq;
+  const ht=S.match(/Transmissionsw[äa]rmeverlust Zul[äa]ssiger H[öo]chstwert Berechneter Wert ([\d.,]+) W\S*\s*\S{0,3}\s*([\d.,]+) W/);
+  if(ht){r.HTmax=nde(ht[1]);r.HTist=nde(ht[2])}
+  r.wb=g(/W[äa]rmebr[üu]ckenzuschlag[\sDΔU]*WB\s*=\s*([\d.,]+)/);
+  r.Qh=g(/Jahres-Heizw[äa]rmebedarf\s*=\s*([\d.]+(?:,\d+)?)\s*kWh\/a/);
+  // 7.2 Ergebnisse: Spalten Trinkwasser | Heizung | Lüftung | Kühlung | PV
+  const qph=S.match(/PRIM[ÄA]R-\s*([\d.]+)\s*kWh\/a\s*([\d.]+)\s*kWh\/a/);
+  const qhA=S.match(/absoluter\s*([\d.]+)\s*kWh\/a\s*([\d.]+)\s*kWh\/a/);
+  if(!isFinite(r.Qh)&&qhA)r.Qh=nde(qhA[2]);
+  if(qph&&isFinite(r.Qh)&&r.Qh>0)r.eph=Math.round(nde(qph[2])/r.Qh*100)/100;
+  // 6.1 Hüllflächentabelle
+  const lines=text.split('\n');
+  let on=false,pending='';r.bauteile=[];
+  for(const l of lines){
+    if(/Transmissionsw[äa]rmeverluste der Heizperiode/i.test(l)){on=true;continue}
+    if(!on)continue;
+    if(/W[äa]rmebr[üu]ckenzuschlag/i.test(l)||/^\s*S\s*\t\s*A\s*=/.test(l))break;
+    const c=l.split('\t').map(x=>x.trim()).filter(Boolean);
+    const di=c.findIndex(x=>/-?\d+,\d\s*°$/.test(x));
+    if(di>=0&&c.length>=di+4){
+      let nm=c.slice(0,di);if(nm.length&&/^\d+$/.test(nm[0]))nm=nm.slice(1);
+      const orient=c[di].replace(/-?\d+,\d\s*°$/,'').trim();
+      const name=[pending,...nm].filter(Boolean).join(' ').replace(/\s*\.\.\.\s*/g,' … ')+(orient?` (${orient})`:'');
+      const A=nde(c[di+1]),U=nde(c[di+2]),Fx=nde(c[di+3]);
+      if(isFinite(A)&&isFinite(U))r.bauteile.push({name,A,U,Fx:isFinite(Fx)?Fx:1});
+      pending='';
+    }else if(c.length&&/^\d+$/.test(c[0])&&c.length>1){pending=c.slice(1).join(' ')}
+  }
+  r.hinweise='Hottgenroth-Formular erkannt und direkt ausgelesen. Referenzwerte aus den zulässigen Höchstwerten abgeleitet (Qp,Ref = Qp,max / 0,55; H\'T,Ref = H\'T,max).';
+  r.src='hott';
+  return (isFinite(r.Qp)&&isFinite(r.HTist)&&r.bauteile.length)?r:null;
+}
+
+// ---------- Lokales Auslesen ohne Claude (Mustererkennung) ----------
+function localImport(text){
+  if(text.replace(/\s/g,'').length<400){impS('Das PDF enthält keinen lesbaren Text (Scan?). Bitte Werte manuell eintragen.','bad');return}
+  const lines=text.split('\n');
+  const nde=t=>/^-?\d{1,3}(\.\d{3})+$/.test(t)?parseFloat(t.replace(/\./g,'')):num(t);
+  const nums=l=>(l.match(/-?\d{1,3}(?:\.\d{3})+(?:,\d+)?|-?\d+(?:[.,]\d+)?/g)||[]).map(nde).filter(isFinite);
+  // Wert hinter einem Stichwort (gleiche oder nächste Zeile)
+  const after=(re,test=()=>true)=>{for(let i=0;i<lines.length;i++){if(re.test(lines[i])){
+      const tail=lines[i].replace(/^.*?(?=\d)/,'');const c=[...nums(tail),...nums(lines[i+1]||'')].filter(test);if(c.length)return c;}}return null};
+  const r={};
+  let v=after(/Geb[äa]udenutzfl[äa]che|\bA\s*N\b/i,x=>x>20&&x<1e6);if(v)r.AN=v[0];
+  v=after(/(Prim[äa]renergie|Q\s*p\b).*(Referenz)/i,x=>x>1&&x<1000);if(v)r.QpRef=v[0];
+  v=after(/(Prim[äa]renergie|Q\s*p\b)(?!.*Referenz).*(Ist|vorhanden|Geb[äa]ude|Wert)/i,x=>x>1&&x<1000);if(v){r.Qp=v[0];if(v[1]&&!r.QpRef)r.Qpmax=v[1]}
+  v=after(/(H['’´]\s*T|Transmission).*(Referenz)/i,x=>x>0.05&&x<3);if(v)r.HTref=v[0];
+  v=after(/(H['’´]\s*T|Transmissionsw[äa]rmeverlust)(?!.*Referenz)/i,x=>x>0.05&&x<3);if(v){r.HTist=v[0];if(v[1]&&!r.HTref)r.HTmax=v[1]}
+  v=after(/Heizw[äa]rmebedarf|\bQ\s*h\b/i,x=>x>10);if(v)r.Qh=v[0]>1000?v[0]:(r.AN?v[0]*r.AN:null);
+  v=after(/W[äa]rmebr[üu]cken(zuschlag)?|Δ\s*U\s*WB|U\s*WB/i,x=>x>=0.01&&x<=0.2);if(v)r.wb=v[0];
+  // Bauteilzeilen: Text gefolgt von Fläche und U-Wert (optional Fx)
+  const skip=/summe|gesamt|^seite|referenz|anforderung|^\s*$/i;
+  r.bauteile=lines.map(l=>{
+    const cells=l.split('\t').map(c=>c.trim()).filter(Boolean);
+    const name=[];const n=[];
+    cells.forEach(c=>{const cc=c.replace(/m²|W\/\(m²K\)|W\/m²K/g,'').trim();
+      if(/^-?[\d.,]+$/.test(cc)&&isFinite(num(cc)))n.push(num(cc));else if(!n.length)name.push(c)});
+    if(!name.length||n.length<2||skip.test(name.join(' ')))return null;
+    const nm=name.join(' ');if(!/[a-zäöü]{3}/i.test(nm))return null;
+    // erste plausible Fläche, danach erster plausibler U-Wert
+    const ai=n.findIndex(x=>x>=0.2&&x<5000);if(ai<0)return null;
+    const ui=n.findIndex((x,i)=>i>ai&&x>=0.05&&x<=6);if(ui<0)return null;
+    const fx=n.find((x,i)=>i>ui&&x>0.2&&x<=1);
+    return {name:nm,A:n[ai],U:n[ui],Fx:fx??1};
+  }).filter(Boolean);
+  r.hinweise='Lokal per Mustererkennung ausgelesen – Kennwerte und Bauteilliste bitte gegen das PDF prüfen (Kontrollzeile unter der Tabelle).';
+  applyImport(r);
+}
+
+function applyImport(r){
+  if(!r||typeof r!=='object'){impS('Keine Werte erkannt.','bad');return}
+  const de=v=>(v==null||!isFinite(+v))?'':String(+v).replace('.',',');
+  document.querySelectorAll('input.filled').forEach(i=>i.classList.remove('filled'));
+  const set=(id,v)=>{const s=de(v);if(s){$(id).value=s;$(id).classList.add('filled');return 1}return 0};
+  let n=0;
+  const ok=x=>x!=null&&isFinite(+x)&&+x>0;
+  // Referenzwerte: direkt, sonst aus den zulässigen Werten zurückrechnen (Qp,max = 55 % Ref, H'T,max = 100 % Ref)
+  const qref=ok(r.QpRef)?+r.QpRef:ok(r.Qpmax)?Math.round(+r.Qpmax/0.55*10)/10:null;
+  const href=ok(r.HTref)?+r.HTref:ok(r.HTmax)?+r.HTmax:null;
+  n+=set('AN',r.AN)+set('HTist',r.HTist)+set('HTref',href)+set('Qp',r.Qp)+set('QpRef',qref)+set('Qh',r.Qh);
+  if(set('wbAlt',r.wb)){$('wbNeu').value=$('wbAlt').value;n++}
+  // ep,h aus Qp-Anteil Heizung / Qh ableiten
+  if(ok(r.eph))n+=set('eph',r.eph);
+  else if(ok(r.QpH)&&+r.Qh>0)n+=set('eph',Math.round(+r.QpH/+r.Qh*100)/100);
+  const rows=Array.isArray(r.bauteile)?r.bauteile.filter(b=>b&&isFinite(+b.A)&&isFinite(+b.U)&&+b.A>0):[];
+  // H'T im Formular oft nur 2-stellig: aus Tabelle + ΔUWB genauer bestimmen, wenn es zum gerundeten Wert passt
+  if(rows.length&&ok(r.HTist)){
+    const A=rows.reduce((s,b)=>s+ +b.A,0),H=rows.reduce((s,b)=>s+ +b.A*+b.U*(isFinite(+b.Fx)?+b.Fx:1),0)+(ok(r.wb)?+r.wb*A:0);
+    const hc=H/A;if(Math.abs(hc-+r.HTist)<0.0051&&String(r.HTist).replace(/^.*\./,'').length<3){r.HTist=Math.round(hc*10000)/10000;$('HTist').value=de(r.HTist)}
+  }
+  if(rows.length){
+    $('tb').innerHTML=rows.map(b=>rowHTML([String(b.name||'Bauteil'),de(b.A),de(b.U),de(b.Fx??1)||'1','',''])).join('');
+    $('tbPsi').innerHTML='';if(!ok(r.wb))$('wbNeu').value=$('wbAlt').value;
+  }
+  calc();
+  const miss=[];if(!rows.length)miss.push('Bauteilliste');if(!$('eph').value)miss.push('ep,h (unter Hochrechnungs-Parameter)');
+  impS(`${n} Kennwerte und ${rows.length} Bauteile übernommen (türkis markiert).`+(miss.length?`\nNoch ergänzen: ${miss.join(', ')}.`:'')+(r.hinweise?`\nHinweis: ${r.hinweise}`:''),'ok');
+}
+
+let saved=null;try{saved=JSON.parse(localStorage.getItem('gegDelta2'))}catch(e){}
+load(saved&&saved.rows?saved:EXAMPLE);
+</script>
